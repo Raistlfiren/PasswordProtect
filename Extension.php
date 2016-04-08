@@ -53,7 +53,8 @@ class Extension extends \Bolt\BaseExtension
                 } else {
                     $redirectto = $this->app['storage']->getContent($this->config['redirect'], array('returnsingle' => true));
                     $returnto = $this->app['request']->getRequestUri();
-                    return $this->app->redirect($redirectto->link(). "?returnto=" . urlencode($returnto));
+                    $redirect = Lib::simpleredirect($redirectto->link(). "?returnto=" . urlencode($returnto));
+                    //return $this->app->redirect($redirectto->link(). "?returnto=" . urlencode($returnto));
                 }
             }
         }
@@ -242,13 +243,20 @@ class Extension extends \Bolt\BaseExtension
         $form->add('password', 'password');
         $form = $form->getForm();
 
+        $configData = $this->read();
+
+        $oldPassword = false;
+
+        if (isset($configData['password'])) {
+            $oldPassword = $configData['password'];
+        }
+
         $password = false;
 
         if ($this->app['request']->getMethod() == 'POST') {
             $form->bind($this->app['request']);
             $data = $form->getData();
             if ($form->isValid()) {
-                $configData = $this->read();
 
                 if (isset($configData['password'])) {
                     $plainPassword = $data['password'];
@@ -262,7 +270,14 @@ class Extension extends \Bolt\BaseExtension
 
         // Render the form, and show it it the visitor.
         $this->app['twig.loader.filesystem']->addPath(__DIR__);
-        $html = $this->app['twig']->render('assets/passwordgenerate.twig', array('form' => $form->createView(), 'password' => $plainPassword));
+        $html = $this->app['twig']->render(
+            'assets/passwordgenerate.twig',
+            array(
+                'form' => $form->createView(),
+                'password' => $plainPassword,
+                'oldPassword' => $oldPassword
+            )
+        );
 
         return new \Twig_Markup($html, 'UTF-8');
 
