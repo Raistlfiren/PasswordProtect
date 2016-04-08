@@ -53,7 +53,7 @@ class Extension extends \Bolt\BaseExtension
                 } else {
                     $redirectto = $this->app['storage']->getContent($this->config['redirect'], array('returnsingle' => true));
                     $returnto = $this->app['request']->getRequestUri();
-                    $redirect = Lib::simpleredirect('/~hope/'.$redirectto->link(). "?returnto=" . urlencode($returnto));
+                    $redirect = Lib::simpleredirect('/~hope/web'.$redirectto->link(). "?returnto=" . urlencode($returnto));
                     //return $this->app->redirect($redirectto->link(). "?returnto=" . urlencode($returnto));
                 }
             }
