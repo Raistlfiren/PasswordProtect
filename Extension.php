@@ -13,6 +13,8 @@ use Symfony\Component\Yaml\Parser;
 
 class Extension extends \Bolt\BaseExtension
 {
+    protected $prependToRedirect;
+
     public function getName()
     {
         return "Password Protect";
@@ -40,6 +42,13 @@ class Extension extends \Bolt\BaseExtension
 
         $this->addMenuOption('Edit Access Code', $this->app['resources']->getUrl('bolt').'generatepasswords', 'fa:pencil-square-o');
 
+        if (isset($this->config['prependToRedirect'])) {
+            $this->prependToRedirect = $this->config['prependToRedirect'];
+        } else {
+            $this->prependToRedirect = '';
+        }
+
+
     }
 
     public function handleRequest(Request $request)
@@ -53,7 +62,7 @@ class Extension extends \Bolt\BaseExtension
                 } else {
                     $redirectto = $this->app['storage']->getContent($this->config['redirect'], array('returnsingle' => true));
                     $returnto = $this->app['request']->getRequestUri();
-                    $redirect = Lib::simpleredirect('/~hope/web'.$redirectto->link(). "?returnto=" . urlencode($returnto));
+                    $redirect = Lib::simpleredirect($this->prependToRedirect . $redirectto->link(). "?returnto=" . urlencode($returnto));
                     //return $this->app->redirect($redirectto->link(). "?returnto=" . urlencode($returnto));
                 }
             }
@@ -77,7 +86,7 @@ class Extension extends \Bolt\BaseExtension
             $redirectto = $this->app['storage']->getContent($this->config['redirect'], array('returnsingle' => true));
             $returnto = $this->app['request']->getRequestUri();
 
-            $redirect = Lib::simpleredirect($redirectto->link(). "?returnto=" . urlencode($returnto));
+            $redirect = Lib::simpleredirect($this->prependToRedirect . $redirectto->link(). "?returnto=" . urlencode($returnto));
 
             // Yeah, this isn't very nice, but we _do_ want to shortcircuit the request.
             die();
@@ -121,7 +130,7 @@ class Extension extends \Bolt\BaseExtension
                 // Print a friendly message..
                 printf("<p class='message-correct'>%s</p>", $this->config['message_correct']);
 
-                $returnto = $this->app['request']->get('returnto');
+                $returnto = $this->prependToRedirect . $this->app['request']->get('returnto');
 
                 // And back we go, to the page we originally came from..
                 if (!empty($returnto)) {
