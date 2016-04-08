@@ -5,6 +5,11 @@ namespace Bolt\Extension\Bolt\PasswordProtect;
 
 use Hautelook\Phpass\PasswordHash;
 use Bolt\Library as Lib;
+use Symfony\Component\HttpFoundation\Request;
+use Silex\Application as SilexApplication;
+use Bolt\Menu\MenuEntry;
+use Symfony\Component\Yaml\Dumper;
+use Symfony\Component\Yaml\Parser;
 
 class Extension extends \Bolt\BaseExtension
 {
@@ -26,6 +31,33 @@ class Extension extends \Bolt\BaseExtension
         $path = $this->app['config']->get('general/branding/path') . '/generatepasswords';
         $this->app->match($path, array($this, "generatepasswords"));
 
+        $extension = $this;
+
+        // Register this extension's actions as an early event.
+        $this->app->before(function (Request $request) use ($extension) {
+            return $extension->handleRequest($request);
+        }, SilexApplication::EARLY_EVENT);
+
+        $this->addMenuOption('Edit Access Code', $this->app['resources']->getUrl('bolt').'generatepasswords', 'fa:pencil-square-o');
+
+    }
+
+    public function handleRequest(Request $request)
+    {
+        $path = explode("/", $request->getPathInfo());
+
+        if (isset($path[1])) {
+            if ($path[1] === $this->config['contentType']) {
+                if ($this->app['session']->get('passwordprotect') == 1) {
+                    return true;
+                } else {
+                    $redirectto = $this->app['storage']->getContent($this->config['redirect'], array('returnsingle' => true));
+                    $returnto = $this->app['request']->getRequestUri();
+                    return $this->app->redirect($redirectto->link(). "?returnto=" . urlencode($returnto));
+                }
+            }
+        }
+
     }
 
     /**
@@ -43,6 +75,7 @@ class Extension extends \Bolt\BaseExtension
 
             $redirectto = $this->app['storage']->getContent($this->config['redirect'], array('returnsingle' => true));
             $returnto = $this->app['request']->getRequestUri();
+
             $redirect = Lib::simpleredirect($redirectto->link(). "?returnto=" . urlencode($returnto));
 
             // Yeah, this isn't very nice, but we _do_ want to shortcircuit the request.
@@ -66,7 +99,10 @@ class Extension extends \Bolt\BaseExtension
             $form->add('username', 'text');
         }
 
-        $form->add('password', 'password');
+        $form->add('password', 'password', [
+            'attr' => ['placeholder' => 'Access Code'],
+            'label' => false
+        ]);
         $form = $form->getForm();
 
         if ($this->app['request']->getMethod() == 'POST') {
@@ -88,8 +124,9 @@ class Extension extends \Bolt\BaseExtension
 
                 // And back we go, to the page we originally came from..
                 if (!empty($returnto)) {
+                    //return $this->app->redirect($returnto);
                     Lib::simpleredirect($returnto);
-                    die();
+                    //die();
                 }
 
             } else {
@@ -107,9 +144,15 @@ class Extension extends \Bolt\BaseExtension
 
         }
 
+        if (! empty($this->config['form'])) {
+            $formView = $this->config['form'];
+        } else {
+            $formView = 'assets/passwordform';
+        }
+
         // Render the form, and show it it the visitor.
         $this->app['twig.loader.filesystem']->addPath(__DIR__);
-        $html = $this->app['twig']->render('assets/passwordform.twig', array('form' => $form->createView()));
+        $html = $this->app['twig']->render($formView, array('form' => $form->createView()));
 
         return new \Twig_Markup($html, 'UTF-8');
 
@@ -168,6 +211,24 @@ class Extension extends \Bolt\BaseExtension
 
     }
 
+    public function passwordGenerator($password)
+    {
+        switch($this->config['encryption']) {
+            case 'plaintext':
+                $password = $password;
+                break;
+            case 'md5':
+                $password = md5($password);
+                break;
+            case 'password_hash':
+                $hasher = new PasswordHash(12, true);
+                $password = $hasher->HashPassword($password);
+                break;
+        }
+
+        return $password;
+    }
+
 
     public function generatepasswords()
     {
@@ -178,7 +239,7 @@ class Extension extends \Bolt\BaseExtension
 
         // Set up the form.
         $form = $this->app['form.factory']->createBuilder('form');
-        $form->add('password', 'text');
+        $form->add('password', 'password');
         $form = $form->getForm();
 
         $password = false;
@@ -187,17 +248,59 @@ class Extension extends \Bolt\BaseExtension
             $form->bind($this->app['request']);
             $data = $form->getData();
             if ($form->isValid()) {
-                $hasher = new PasswordHash(12, true);
-                $password = $hasher->HashPassword($data['password']);
+                $configData = $this->read();
+
+                if (isset($configData['password'])) {
+                    $plainPassword = $data['password'];
+                    $hashedPassword = $this->passwordGenerator($plainPassword);
+                    $configData['password'] = $hashedPassword;
+                    $this->write($configData);
+                }
+
             }
         }
 
         // Render the form, and show it it the visitor.
         $this->app['twig.loader.filesystem']->addPath(__DIR__);
-        $html = $this->app['twig']->render('assets/passwordgenerate.twig', array('form' => $form->createView(), 'password' => $password));
+        $html = $this->app['twig']->render('assets/passwordgenerate.twig', array('form' => $form->createView(), 'password' => $plainPassword));
 
         return new \Twig_Markup($html, 'UTF-8');
 
+    }
+
+    /**
+     * Handles reading the Bolt Forms yml file.
+     *
+     * @return array The parsed data
+     */
+    protected function read()
+    {
+        $file = $this->app['resources']->getPath('config/extensions/passwordprotect.bolt.yml');
+        $yaml = file_get_contents($file);
+        $parser = new Parser();
+        $data = $parser->parse($yaml);
+        return $data;
+    }
+
+    /**
+     * Internal method that handles writing the data array back to the YML file.
+     *
+     * @param array $data
+     *
+     * @return bool True if successful
+     */
+    protected function write($data)
+    {
+        $dumper = new Dumper();
+        $dumper->setIndentation(2);
+        $yaml = $dumper->dump($data, 9999);
+        $file = $this->app['resources']->getPath('config/extensions/passwordprotect.bolt.yml');
+        try {
+            $response = @file_put_contents($file, $yaml);
+        } catch (\Exception $e) {
+            $response = null;
+        }
+        return $response;
     }
 
 }
