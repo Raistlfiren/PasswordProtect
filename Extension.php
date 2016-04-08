@@ -130,14 +130,13 @@ class Extension extends \Bolt\BaseExtension
                 // Print a friendly message..
                 printf("<p class='message-correct'>%s</p>", $this->config['message_correct']);
 
-                $returnto = $this->prependToRedirect . $this->app['request']->get('returnto');
+                $returnto = $this->app['request']->get('returnto');
 
-                var_dump($returnto);
                 // And back we go, to the page we originally came from..
                 if (!empty($returnto)) {
                     //return $this->app->redirect($returnto);
                     Lib::simpleredirect($returnto);
-                    //die();
+                    die();
                 }
 
             } else {
