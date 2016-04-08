@@ -260,6 +260,7 @@ class Extension extends \Bolt\BaseExtension
 
                 if (isset($configData['password'])) {
                     $plainPassword = $data['password'];
+                    $oldPassword = $plainPassword;
                     $hashedPassword = $this->passwordGenerator($plainPassword);
                     $configData['password'] = $hashedPassword;
                     $this->write($configData);
