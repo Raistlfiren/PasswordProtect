@@ -132,6 +132,7 @@ class Extension extends \Bolt\BaseExtension
 
                 $returnto = $this->prependToRedirect . $this->app['request']->get('returnto');
 
+                var_dump($returnto);
                 // And back we go, to the page we originally came from..
                 if (!empty($returnto)) {
                     //return $this->app->redirect($returnto);
